@@ -19,10 +19,12 @@
 - **Visual Element Selection** - Hover over elements to see them highlighted in real-time
 - **Element Info Tooltip** - Shows tag name, classes, and dimensions while hovering
 - **One-Click Copy** - Click any element to copy its complete outerHTML
+- **Quick Selecting** - Save a CSS selector and reuse it from the popup; matching elements are previewed as you edit
+- **HTML File Download** - Optionally open a save dialog after selecting an element; filenames are based on the element's first heading or page URL
 - **Keyboard Shortcut** - Quick access with `Ctrl+Shift+E` (or `Cmd+Shift+E` on Mac)
 - **ESC to Cancel** - Press Escape to exit selection mode anytime
 - **Lightweight** - No bloat, minimal permissions
-- **Privacy First** - Works entirely locally, no data collection
+- **Privacy First** - Works locally with no external data collection or transmission
 
 ## Installation
 
@@ -54,7 +56,18 @@
    - The complete HTML is copied to your clipboard
    - A toast notification confirms the copy
 
-4. **Cancel selection:**
+4. **Save and reuse a selector (optional):**
+   - The CSS selector of the most recently selected element is saved automatically
+   - Open the popup to preview or edit the selector; save a matching selector with the save button or Enter
+   - Click **Quick Selecting** to select that element again, copy its HTML, and optionally download it
+   - Use the remove button to clear the saved selector
+
+5. **Download HTML (optional):**
+   - Turn on **Download HTML when selection** in the popup
+   - Selecting an element opens the browser's save dialog for an `.html` file; copying to the clipboard still happens
+   - The filename uses the first heading in the selected HTML when available, otherwise it is based on the page URL
+
+6. **Cancel selection:**
    - Press `ESC` to cancel without copying
 
 ## Permissions
@@ -62,13 +75,16 @@
 | Permission | Reason |
 |------------|--------|
 | `activeTab` | To highlight and copy elements on the current page |
-| `scripting` | To inject the selection functionality when activated |
+| `scripting` | To inject the selection functionality when activated or when previewing a selector |
+| `downloads` | To show the save dialog and download selected HTML when the option is enabled |
+| `storage` | To remember the selected CSS selector and download preference locally |
 
 This extension does **NOT**:
-- Collect any user data
+- Collect or transmit personal data or page content
 - Track your browsing
 - Make any network requests
-- Access your data on any site until you activate it
+- Access page content except when you activate selection or preview a CSS selector in the popup
+- Store copied page HTML in extension storage
 
 ## Development
 
@@ -79,8 +95,11 @@ Quick Copy DOM/
 ├── manifest.json      # Extension configuration
 ├── background.js      # Service worker for keyboard shortcuts
 ├── content.js         # Element selection logic
+├── download-name.js   # HTML download filename and document helpers
 ├── popup.html         # Extension popup UI
 ├── popup.js           # Popup interaction logic
+├── PRIVACY.md         # Privacy policy
+├── README.md          # Project documentation
 ├── icons/             # Extension icons
 │   ├── icon16.png
 │   ├── icon48.png
