@@ -3,7 +3,7 @@
   "name": "Quick Copy DOM",
   "version": "1.0.0",
   "description": "Visually select any element on the page and instantly copy its HTML to clipboard. Like DevTools element inspector, but faster.",
-  "permissions": ["activeTab", "scripting"],
+  "permissions": ["activeTab", "downloads", "scripting", "storage"],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

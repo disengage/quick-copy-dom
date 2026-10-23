@@ -7,6 +7,24 @@
   let overlay = null;
   let tooltip = null;
   let currentElement = null;
+  let downloadOnSelection = false;
+  let downloadSettingVersion = 0;
+  let previewRequestId = 0;
+
+  function refreshDownloadSetting() {
+    const version = ++downloadSettingVersion;
+    chrome.storage.local.get({ downloadOnSelection: false }, (data) => {
+      if (version !== downloadSettingVersion || chrome.runtime.lastError) return;
+      downloadOnSelection = !!data.downloadOnSelection;
+    });
+  }
+
+  refreshDownloadSetting();
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local' || !changes.downloadOnSelection) return;
+    downloadOnSelection = !!changes.downloadOnSelection.newValue;
+    downloadSettingVersion += 1;
+  });
 
   // Create the highlight overlay
   function createOverlay() {
@@ -47,8 +65,221 @@
     document.body.appendChild(tooltip);
   }
 
+  function uniqueSelector(element) {
+    if (!(element instanceof Element)) return '';
+    if (element === document.documentElement) return 'html';
+
+    const segments = [];
+    let node = element;
+
+    while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.documentElement) {
+      if (node.id) {
+        const idSelector = `#${CSS.escape(node.id)}`;
+        try {
+          if (document.querySelectorAll(idSelector).length === 1) {
+            segments.unshift(idSelector);
+            break;
+          }
+        } catch (error) {
+          // Keep walking when this id cannot be queried.
+        }
+      }
+
+      let segment = node.tagName.toLowerCase();
+      const parent = node.parentElement;
+      if (parent) {
+        const sameTag = Array.from(parent.children).filter((child) => child.tagName === node.tagName);
+        if (sameTag.length > 1) {
+          segment += `:nth-of-type(${sameTag.indexOf(node) + 1})`;
+        }
+      }
+
+      segments.unshift(segment);
+      node = node.parentElement;
+    }
+
+    return segments.join(' > ');
+  }
+
+  function rememberSelector(element) {
+    const selector = uniqueSelector(element);
+    if (!selector) return;
+    chrome.storage.local.set({ lastSelector: selector }).catch((error) => {
+      console.error('Quick Copy DOM - Could not save selector:', error);
+    });
+  }
+
+  function saveWithLink(html, filename) {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename || 'selection.html';
+    link.rel = 'noopener';
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  }
+
+  function requestDownload(html) {
+    const naming = globalThis.QuickCopyDom;
+    const filename = naming
+      ? naming.buildDownloadFilename(html, location.href)
+      : 'selection.html';
+    const fileHtml = naming ? naming.wrapHtmlDocument(html) : html;
+
+    chrome.runtime.sendMessage({
+      action: 'downloadHtml',
+      html: fileHtml,
+      filename
+    }, (response) => {
+      const message = chrome.runtime.lastError?.message || response?.error || '';
+      if (!message || /cancel/i.test(message)) return;
+
+      try {
+        saveWithLink(fileHtml, filename);
+      } catch (error) {
+        showToast('Could not save HTML file', 'error');
+        console.error('Quick Copy DOM - Save error:', error && error.message ? error.message : error);
+      }
+    });
+  }
+
+  function copyWithFallback(html) {
+    const area = document.createElement('textarea');
+    area.value = html;
+    area.setAttribute('readonly', '');
+    area.style.position = 'fixed';
+    area.style.top = '0';
+    area.style.left = '-9999px';
+    document.body.appendChild(area);
+    area.focus();
+    area.select();
+
+    let copied = false;
+    try {
+      copied = document.execCommand('copy');
+    } catch (error) {
+      copied = false;
+    }
+
+    area.remove();
+    return copied;
+  }
+
+  function copyHtml(html) {
+    const onSuccess = () => showToast('HTML copied to clipboard!');
+    const onFailure = () => {
+      if (copyWithFallback(html)) {
+        onSuccess();
+        return;
+      }
+      showToast('Failed to copy', 'error');
+    };
+
+    if (!navigator.clipboard || !navigator.clipboard.writeText) {
+      onFailure();
+      return;
+    }
+
+    navigator.clipboard.writeText(html).then(onSuccess).catch((error) => {
+      console.error('Quick Copy DOM - clipboard:', error && error.name, error && error.message);
+      onFailure();
+    });
+  }
+
+  function selectionFile(html) {
+    const naming = globalThis.QuickCopyDom;
+    return {
+      filename: naming ? naming.buildDownloadFilename(html, location.href) : 'selection.html',
+      fileHtml: naming ? naming.wrapHtmlDocument(html) : html
+    };
+  }
+
+  async function quickSelect(selector) {
+    const trimmed = String(selector || '').trim();
+    if (!trimmed) {
+      showToast('No saved element to select', 'error');
+      return { success: false };
+    }
+
+    let element = null;
+    try {
+      element = document.querySelector(trimmed);
+    } catch (error) {
+      showToast('Selector is invalid', 'error');
+      return { success: false };
+    }
+
+    if (!element) {
+      showToast('Saved element was not found on this page', 'error');
+      return { success: false };
+    }
+
+    if (!overlay) createOverlay();
+    addStyles();
+    updateOverlay(element);
+
+    const html = element.outerHTML;
+    const file = selectionFile(html);
+    let copied = false;
+
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(html);
+        copied = true;
+      }
+    } catch (error) {
+      copied = false;
+    }
+
+    if (!copied) copied = copyWithFallback(html);
+
+    setTimeout(() => {
+      if (overlay) overlay.style.display = 'none';
+      if (tooltip) tooltip.style.display = 'none';
+    }, 700);
+
+    return {
+      success: true,
+      html,
+      copied,
+      fileHtml: file.fileHtml,
+      filename: file.filename
+    };
+  }
+
+  function previewSelector(selector, show, requestId) {
+    if (requestId < previewRequestId) return { found: false, stale: true };
+    previewRequestId = requestId;
+
+    let element = null;
+    const trimmed = String(selector || '').trim();
+    if (trimmed) {
+      try {
+        element = document.querySelector(trimmed);
+      } catch (error) {
+        element = null;
+      }
+    }
+
+    if (show && element) {
+      if (!overlay) createOverlay();
+      addStyles();
+      updateOverlay(element);
+    } else {
+      if (overlay) overlay.style.display = 'none';
+      if (tooltip) tooltip.style.display = 'none';
+    }
+
+    return { found: !!element };
+  }
+
   // Show toast notification
   function showToast(message, type = 'success') {
+    addStyles();
     const existingToast = document.getElementById('quick-copy-dom-toast');
     if (existingToast) existingToast.remove();
 
@@ -156,17 +387,11 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
 
-    // Copy outerHTML to clipboard
-    const html = currentElement.outerHTML;
-
-    navigator.clipboard.writeText(html).then(() => {
-      showToast('HTML copied to clipboard!');
-    }).catch(err => {
-      showToast('Failed to copy', 'error');
-      console.error('Quick Copy DOM - Error:', err);
-    });
-
-    // Deactivate after copying
+    const element = currentElement;
+    const html = element.outerHTML;
+    rememberSelector(element);
+    if (downloadOnSelection) requestDownload(html);
+    copyHtml(html);
     deactivate();
 
     return false;
@@ -185,6 +410,7 @@
   function activate() {
     if (isActive) return;
 
+    refreshDownloadSetting();
     isActive = true;
 
     if (!overlay) {
@@ -221,6 +447,8 @@
 
   // Add animation styles
   function addStyles() {
+    if (document.getElementById('quick-copy-dom-styles')) return;
+
     const style = document.createElement('style');
     style.id = 'quick-copy-dom-styles';
     style.textContent = `
@@ -259,10 +487,39 @@
 
   // Listen for messages from background script
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (!message || !message.action) return;
+
     if (message.action === 'toggle') {
+      if (typeof message.downloadOnSelection === 'boolean') {
+        downloadOnSelection = message.downloadOnSelection;
+        downloadSettingVersion += 1;
+      }
+      refreshDownloadSetting();
       toggle();
       sendResponse({ success: true, isActive });
+      return false;
     }
-    return true;
+
+    if (message.action === 'quickSelect') {
+      quickSelect(message.selector)
+        .then((result) => sendResponse(result))
+        .catch((error) => sendResponse({ success: false, error: error.message }));
+      return true;
+    }
+
+    if (message.action === 'previewSelector') {
+      sendResponse(previewSelector(message.selector, !!message.show, Number(message.requestId) || 0));
+      return false;
+    }
+
+    if (message.action === 'copyResult') {
+      showToast(
+        message.ok ? 'HTML copied to clipboard!' : 'Failed to copy',
+        message.ok ? 'success' : 'error'
+      );
+      sendResponse({ ok: true });
+    }
+
+    return false;
   });
 })();
