@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Quick Copy DOM",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Visually select any element on the page and instantly copy its HTML to clipboard. Like DevTools element inspector, but faster.",
   "permissions": ["activeTab", "downloads", "scripting", "storage"],
   "action": {

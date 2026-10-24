@@ -3,6 +3,7 @@ const quickBtn = document.getElementById('quickBtn');
 const quickSection = document.getElementById('quickSection');
 const downloadCheckbox = document.getElementById('downloadOnSelection');
 const selectorInput = document.getElementById('selectorInput');
+const selectorHost = document.getElementById('selectorHost');
 const selectorActionBtn = document.getElementById('selectorActionBtn');
 const selectorActionIcon = document.getElementById('selectorActionIcon');
 
@@ -24,6 +25,7 @@ function saveWithLink(html, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
 let savedSelector = '';
+let currentHost = '';
 let selectorMatches = false;
 let selectorValidationVersion = 0;
 let previewRequestId = Date.now() * 1000;
@@ -32,7 +34,7 @@ function updateSelectorVisibility() {
   const value = selectorInput.value.trim();
   const hasSelector = value.length > 0;
   const isSavedSelector = hasSelector && value === savedSelector;
-  const canSaveSelector = hasSelector && !isSavedSelector && selectorMatches;
+  const canSaveSelector = hasSelector && !isSavedSelector && selectorMatches && !!currentHost;
 
   quickSection.hidden = !hasSelector;
   selectorActionBtn.hidden = !isSavedSelector && !canSaveSelector;
@@ -49,13 +51,38 @@ function applySelector(selector) {
   updateSelectorVisibility();
 }
 
+function hostFromUrl(url) {
+  try {
+    return new URL(url).hostname;
+  } catch (error) {
+    return '';
+  }
+}
+
+async function updateHostSelector(selector) {
+  if (!currentHost) return;
+  const data = await chrome.storage.local.get({ selectorsByHost: {} });
+  const selectorsByHost = { ...(data.selectorsByHost || {}) };
+  if (selector) selectorsByHost[currentHost] = selector;
+  else delete selectorsByHost[currentHost];
+  await chrome.storage.local.set({ selectorsByHost });
+}
+
 async function loadSettings() {
+  const tab = await activeTab();
+  currentHost = hostFromUrl(tab?.url);
+  selectorHost.textContent = currentHost;
+  selectorHost.hidden = !currentHost;
+
   const data = await chrome.storage.local.get({
+    selectorsByHost: {},
     lastSelector: '',
     downloadOnSelection: false
   });
+  if (data.lastSelector) chrome.storage.local.remove('lastSelector');
   downloadCheckbox.checked = !!data.downloadOnSelection;
-  applySelector(data.lastSelector);
+  const saved = currentHost ? (data.selectorsByHost || {})[currentHost] || '' : '';
+  applySelector(saved);
 }
 
 async function persistCheckbox() {
@@ -113,12 +140,13 @@ async function inspectSelector(selector, showPreview) {
 
 async function saveSelector() {
   const value = selectorInput.value.trim();
-  if (!value || value === savedSelector) return value;
+  if (!value || !currentHost) return '';
+  if (value === savedSelector) return value;
 
   const matches = await inspectSelector(value, document.activeElement === selectorInput);
   if (!matches || value !== selectorInput.value.trim()) return '';
 
-  await chrome.storage.local.set({ lastSelector: value });
+  await updateHostSelector(value);
   savedSelector = value;
   updateSelectorVisibility();
   return value;
@@ -154,7 +182,7 @@ selectorInput.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter') return;
   event.preventDefault();
   const value = selectorInput.value.trim();
-  if (value && value !== savedSelector && selectorMatches) {
+  if (value && currentHost && value !== savedSelector && selectorMatches) {
     selectorActionBtn.click();
   }
 });
@@ -169,7 +197,7 @@ selectorActionBtn.addEventListener('click', async () => {
     if (!value) return;
 
     if (value === savedSelector) {
-      await chrome.storage.local.remove('lastSelector');
+      await updateHostSelector('');
       savedSelector = '';
       selectorInput.value = '';
       selectorMatches = false;

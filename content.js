@@ -103,9 +103,14 @@
 
   function rememberSelector(element) {
     const selector = uniqueSelector(element);
-    if (!selector) return;
-    chrome.storage.local.set({ lastSelector: selector }).catch((error) => {
-      console.error('Quick Copy DOM - Could not save selector:', error);
+    const host = location.hostname;
+    if (!selector || !host) return;
+    chrome.storage.local.get({ selectorsByHost: {} }, (data) => {
+      if (chrome.runtime.lastError) return;
+      const selectorsByHost = { ...(data.selectorsByHost || {}), [host]: selector };
+      chrome.storage.local.set({ selectorsByHost }).catch((error) => {
+        console.error('Quick Copy DOM - Could not save selector:', error);
+      });
     });
   }
 
