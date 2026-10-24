@@ -29,6 +29,7 @@ let currentHost = '';
 let selectorMatches = false;
 let selectorValidationVersion = 0;
 let previewRequestId = Date.now() * 1000;
+let keepQuickHighlight = false;
 
 function updateSelectorVisibility() {
   const value = selectorInput.value.trim();
@@ -237,6 +238,35 @@ async function inject(tabId) {
   }
 }
 
+function previewOnPage(selector, show) {
+  const requestId = ++previewRequestId;
+  const trimmed = String(selector || '').trim();
+  if (show && !trimmed) return;
+
+  void (async () => {
+    const tab = await activeTab();
+    if (!tab?.id || requestId !== previewRequestId) return;
+    if (show) await inject(tab.id);
+    if (requestId !== previewRequestId) return;
+    await sendTabMessage(tab.id, {
+      action: 'previewSelector',
+      selector: show ? trimmed : '',
+      show,
+      requestId
+    });
+  })().catch((error) => console.error('Quick Copy DOM - Could not preview selector:', error));
+}
+
+quickBtn.addEventListener('mouseenter', () => {
+  previewOnPage(savedSelector, true);
+});
+
+quickBtn.addEventListener('mouseleave', () => {
+  if (keepQuickHighlight) return;
+  const typed = document.activeElement === selectorInput ? selectorInput.value.trim() : '';
+  previewOnPage(typed, !!typed);
+});
+
 toggleBtn.addEventListener('click', async () => {
   await persistCheckbox();
   const tab = await activeTab();
@@ -264,10 +294,22 @@ quickBtn.addEventListener('click', async () => {
   if (!tab?.id) return;
   await inject(tab.id);
 
+  keepQuickHighlight = true;
+  previewRequestId += 1;
   const shouldDownload = downloadCheckbox.checked;
   chrome.tabs.sendMessage(tab.id, { action: 'quickSelect', selector }, (response) => {
     if (chrome.runtime.lastError || !response?.success) {
-      window.close();
+      keepQuickHighlight = false;
+      const requestId = ++previewRequestId;
+      chrome.tabs.sendMessage(tab.id, {
+        action: 'previewSelector',
+        selector: '',
+        show: false,
+        requestId
+      }, () => {
+        void chrome.runtime.lastError;
+        window.close();
+      });
       return;
     }
 
