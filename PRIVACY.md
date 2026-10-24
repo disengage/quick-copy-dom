@@ -15,16 +15,16 @@ Specifically, we do NOT:
 - Track your browsing history
 - Send any information to external servers
 - Use analytics or tracking tools
-- Access page content except when you activate selection or preview a CSS selector in the popup
+- Access page content except when you activate selection, preview a CSS selector, or hover Quick Selecting
 
-The extension stores two settings locally in Chrome's extension storage: the most recently selected CSS selector and whether HTML downloads are enabled. These settings are used to restore the popup state and support Quick Selecting. You can remove the saved selector from the popup. The extension does not store copied HTML or a history of selected elements.
+The extension stores its settings locally in Chrome's extension storage (`chrome.storage.local`): the latest CSS selector for each hostname, and whether HTML downloads are enabled. Subdomains are separate entries, and only the latest selector is kept for each hostname. These settings restore the popup for the site you are on and support Quick Selecting. Removing the selector in the popup deletes only the entry for the open domain. The extension does not store copied HTML or a history of selected elements.
 
 ## How the Extension Works
 
 Quick Copy DOM operates entirely within your browser:
 
-1. When you activate the extension (by clicking the icon or using the keyboard shortcut), or preview a CSS selector in the popup, it injects a small script into the current page
-2. The script highlights elements as you hover over them or preview a matching saved selector
+1. When you activate the extension (by clicking the icon or using the keyboard shortcut), preview a CSS selector, or hover Quick Selecting, it injects a small script into the current page
+2. The script highlights elements as you hover over them in selection mode, when a CSS selector is previewed from the popup, and when the pointer is over Quick Selecting for the selector saved for that hostname
 3. When you select an element, its HTML is copied to your local clipboard
 4. If **Download HTML when selection** is enabled, the extension sends the selected HTML to Chrome's downloads API to show a save dialog and save an `.html` file at the location you choose. Quick Selecting also copies the HTML and can download it when this option is enabled.
 5. No page content or settings are sent to an external service
@@ -34,9 +34,9 @@ Quick Copy DOM operates entirely within your browser:
 | Permission | Why We Need It |
 |------------|----------------|
 | `activeTab` | To interact with the current page when you activate the extension. This permission only grants access to the tab you're actively using. |
-| `scripting` | To inject the element selection functionality when activated or to preview a CSS selector from the popup. |
+| `scripting` | To inject the element selection script into the active tab when you activate the extension, preview a CSS selector, or hover Quick Selecting. |
 | `downloads` | To open Chrome's save dialog and download selected HTML when you enable the download option. |
-| `storage` | To save the last selected CSS selector and download preference in Chrome's local extension storage. |
+| `storage` | To keep the latest CSS selector for each hostname, and the download preference, in Chrome's local extension storage so they remain on your device. |
 
 ## Third-Party Services
 
@@ -44,7 +44,7 @@ Quick Copy DOM does not use any third-party services, APIs, or analytics.
 
 ## Data Storage
 
-The selected HTML is processed in memory and copied to your local clipboard. It is not written to extension storage. The CSS selector and download preference persist in Chrome's local extension storage until removed or the extension's data is cleared. If you choose to download HTML, Chrome saves the file to the location you select; that file is managed by Chrome and remains on your device.
+The selected HTML is processed in memory and copied to your local clipboard. It is not written to extension storage. The per-hostname selector map and the download preference persist in Chrome's local extension storage until you remove a site's selector, or the extension's data is cleared. If you choose to download HTML, Chrome saves the file to the location you select; that file is managed by Chrome and remains on your device.
 
 ## Changes to This Policy
 
@@ -56,4 +56,4 @@ If you have questions about this privacy policy, please open an issue on our Git
 
 ## Summary
 
-Quick Copy DOM is a local-only tool: it does not track browsing, collect personal data, or communicate with external services. It stores only the selector and download preference needed for its features, and does not store selected page HTML.
+Quick Copy DOM is a local-only tool: it does not track browsing, collect personal data, or communicate with external services. It stores only the latest selector for each hostname and the download preference needed for its features, and does not store selected page HTML.

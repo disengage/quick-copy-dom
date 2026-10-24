@@ -12,6 +12,10 @@
   Like DevTools element inspector, but faster.
 </p>
 
+<p align="center">
+  <img src="docs/ss.png" alt="Quick Copy DOM popup showing the saved selector for translate.google.com, with that element highlighted on the page" width="720">
+</p>
+
 ---
 
 ## Features
@@ -19,7 +23,7 @@
 - **Visual Element Selection** - Hover over elements to see them highlighted in real-time
 - **Element Info Tooltip** - Shows tag name, classes, and dimensions while hovering
 - **One-Click Copy** - Click any element to copy its complete outerHTML
-- **Quick Selecting** - Save a CSS selector and reuse it from the popup; matching elements are previewed as you edit
+- **Quick Selecting** - Each domain, including subdomains, keeps its own latest CSS selector. Hover **Quick Selecting** to highlight that element, then click to copy it again. Matching elements are still previewed as you edit the selector.
 - **HTML File Download** - Optionally open a save dialog after selecting an element; filenames are based on the element's first heading or page URL
 - **Keyboard Shortcut** - Quick access with `Ctrl+Shift+E` (or `Cmd+Shift+E` on Mac)
 - **ESC to Cancel** - Press Escape to exit selection mode anytime
@@ -57,10 +61,10 @@
    - A toast notification confirms the copy
 
 4. **Save and reuse a selector (optional):**
-   - The CSS selector of the most recently selected element is saved automatically
-   - Open the popup to preview or edit the selector; save a matching selector with the save button or Enter
-   - Click **Quick Selecting** to select that element again, copy its HTML, and optionally download it
-   - Use the remove button to clear the saved selector
+   - Selecting an element saves its CSS selector for that hostname. `www.example.com` and `example.com` are stored separately, and only the latest selector is kept for each one.
+   - Open the popup on a tab to see that site's hostname and selector. Edit it and save a matching selector with the save button or Enter; the field previews matches as you type.
+   - Hover **Quick Selecting** to highlight the saved element on the page. Click it to copy that element's HTML again, and to download the file when the download option is on.
+   - Use the remove button to clear the selector for the current domain only.
 
 5. **Download HTML (optional):**
    - Turn on **Download HTML when selection** in the popup
@@ -77,13 +81,13 @@
 | `activeTab` | To highlight and copy elements on the current page |
 | `scripting` | To inject the selection functionality when activated or when previewing a selector |
 | `downloads` | To show the save dialog and download selected HTML when the option is enabled |
-| `storage` | To remember the selected CSS selector and download preference locally |
+| `storage` | To remember the latest CSS selector for each domain and the download preference locally |
 
 This extension does **NOT**:
 - Collect or transmit personal data or page content
 - Track your browsing
 - Make any network requests
-- Access page content except when you activate selection or preview a CSS selector in the popup
+- Access page content except when you activate selection, preview a CSS selector, or hover **Quick Selecting**
 - Store copied page HTML in extension storage
 
 ## Development
